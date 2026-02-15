@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+.DS_Store
+
+# Data + vector DB (do NOT commit)
+data/
+chroma/
+faiss_store/
+*.sqlite*
+*.db
+
+# env files
+.env
+.env.*

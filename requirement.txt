@@ -1,0 +1,26 @@
+# --- Core LangChain ---
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+
+# --- PDF loaders ---
+pymupdf
+pypdf
+
+# --- Embeddings (local, no OpenAI key needed) ---
+sentence-transformers
+
+# --- Vector DB (pick ONE first; FAISS is easiest) ---
+faiss-cpu
+
+# --- Optional: Chroma (persistent DB) ---
+# If you want Chroma later, uncomment both lines below
+# chromadb
+# langchain-chroma
+
+
+# --- Utilities ---
+python-dotenv
+ipykernel
+numpy

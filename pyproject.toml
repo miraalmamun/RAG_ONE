@@ -1,0 +1,19 @@
+[project]
+name = "rag-one"
+version = "0.1.0"
+description = "RAG project"
+requires-python = ">=3.11"
+
+dependencies = [
+    "faiss-cpu>=1.13.2",
+    "ipykernel>=7.2.0",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.31",
+    "langchain-core>=0.3.83",
+    "langchain-text-splitters>=0.3.11",
+    "numpy>=2.4.2",
+    "pymupdf>=1.27.1",
+    "pypdf>=6.7.0",
+    "python-dotenv>=1.2.1",
+    "sentence-transformers>=5.2.2",
+]
