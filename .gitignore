@@ -5,7 +5,7 @@ __pycache__/
 .DS_Store
 
 # Data + vector DB (do NOT commit)
-data/
+#data/
 chroma/
 faiss_store/
 *.sqlite*
