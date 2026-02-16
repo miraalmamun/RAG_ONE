@@ -291,3 +291,91 @@ source_file
 file_type
 
 page (for pdf)
+==============================================================================================
+from __future__ import annotations
+
+from typing import List
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+class EmbeddingPipeline:
+    """
+    Beginner-friendly pipeline:
+      1) chunk_documents(docs) -> List[Document] chunks
+      2) embed_chunks(chunks)  -> np.ndarray embeddings
+
+    Important: chunks remain Documents, so metadata is preserved for citations.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        chunk_size: int = 1000,
+        chunk_overlap: int = 200,
+    ):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.model_name = model_name
+
+        self.model = SentenceTransformer(model_name)
+        print(f"[INFO] Loaded embedding model: {model_name}")
+
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+    def chunk_documents(self, documents: List[Document]) -> List[Document]:
+        """
+        Split input Documents into smaller Documents (chunks).
+        Metadata is preserved automatically, then we add chunk metadata too.
+        """
+        chunks: List[Document] = self.splitter.split_documents(documents)
+
+        # Add helpful metadata for every chunk
+        for i, c in enumerate(chunks):
+            c.metadata = c.metadata or {}
+            c.metadata["chunk_id"] = i
+            c.metadata["chunk_size"] = len(c.page_content)
+
+            # Ensure these keys always exist (for citations)
+            c.metadata.setdefault("source_file", c.metadata.get("source_file") or c.metadata.get("source"))
+            c.metadata.setdefault("page", c.metadata.get("page", None))
+
+        print(f"[INFO] Split {len(documents)} documents into {len(chunks)} chunks.")
+        return chunks
+
+    def embed_chunks(self, chunks: List[Document], normalize: bool = True) -> np.ndarray:
+        """
+        Convert chunks to embeddings.
+        normalize=True makes cosine search (FAISS IP) work better.
+        """
+        texts = [c.page_content for c in chunks]
+        print(f"[INFO] Generating embeddings for {len(texts)} chunks...")
+
+        embeddings = self.model.encode(
+            texts,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            normalize_embeddings=normalize,  # IMPORTANT for cosine similarity
+        ).astype("float32")
+
+        print(f"[INFO] Embeddings shape: {embeddings.shape}")
+        return embeddings
+
+
+if __name__ == "__main__":
+    from src.data_loader import load_all_documents
+
+    docs = load_all_documents("data")
+    emb_pipe = EmbeddingPipeline()
+    chunks = emb_pipe.chunk_documents(docs)
+    embeddings = emb_pipe.embed_chunks(chunks)
+
+    print("\n[INFO] First chunk metadata:", chunks[0].metadata)
+    print("[INFO] Example embedding vector length:", len(embeddings[0]))

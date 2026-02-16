@@ -1,0 +1,568 @@
+EMBEDDING PIPELINE NOTES (BEGINNER FRIENDLY)
+
+TOPIC:
+This note explains the Python class EmbeddingPipeline.
+This class is used in a RAG pipeline (Retrieval Augmented Generation).
+
+RAG means:
+
+Load documents (PDF, txt, etc.)
+
+Split them into small chunks
+
+Convert each chunk into embeddings (vectors)
+
+Store embeddings into FAISS / Chroma
+
+Later search and retrieve best chunks based on user question
+
+============================================================
+
+WHAT IS THE PURPOSE OF THIS EMBEDDING PIPELINE?
+============================================================
+
+This pipeline does 2 main things:
+
+A) CHUNKING
+Big documents -> split into small pieces (chunks)
+
+B) EMBEDDING
+Each chunk -> convert into numbers (vector)
+
+After embeddings are created, we can store them into a vector database like:
+
+FAISS
+
+ChromaDB
+
+Then we can search documents by meaning (semantic search).
+
+============================================================
+2) WHY DO WE NEED CHUNKING?
+
+Because PDF/text files can be huge.
+
+Example:
+
+PDF has 200 pages
+
+Each page has 2000 characters
+
+Total characters = 400,000+
+
+Embedding a huge document as one block is bad because:
+
+Too large for embedding model
+
+Search results become inaccurate
+
+Meaning gets mixed
+
+So we split into smaller chunks.
+
+============================================================
+3) WHAT IS AN EMBEDDING?
+
+An embedding is a list/array of numbers that represents the meaning of a sentence.
+
+Example sentence:
+"Dhaka is the capital of Bangladesh."
+
+Embedding becomes something like:
+[0.12, -0.45, 0.88, 0.33, ... many more numbers]
+
+These numbers are not random.
+They represent meaning in mathematical form.
+
+Computers cannot understand English like humans,
+but computers can compare vectors (numbers).
+
+============================================================
+4) WHY EMBEDDINGS ARE USEFUL?
+
+Because we can compare embeddings.
+
+Example:
+User question:
+"What is the capital of Bangladesh?"
+
+The system will embed the question also, then compare it with chunk embeddings.
+
+The closest chunk embedding is returned.
+
+So it finds the chunk:
+"Dhaka is the capital of Bangladesh."
+
+============================================================
+5) WHAT IS LANGCHAIN Document OBJECT?
+
+LangChain Document is an object that contains:
+
+page_content -> the actual text
+
+metadata -> extra info like file name, page number, etc.
+
+Example:
+
+Document(
+page_content="Bangladesh is a country in South Asia...",
+metadata={"source_file": "geo.pdf", "page": 3}
+)
+
+So Document is like a package:
+
+text inside
+
+information about where it came from
+
+============================================================
+6) WHY WE KEEP CHUNKS AS Document OBJECTS?
+
+Because metadata is very important.
+
+If we chunk into plain strings, metadata is lost.
+
+But if we chunk into Document objects, metadata stays.
+
+That means later we can show citations like:
+
+file name
+
+page number
+
+chunk id
+
+Example:
+Answer comes from:
+source_file = book.pdf
+page = 12
+chunk_id = 20
+
+============================================================
+7) WHAT IS chunk_size?
+
+chunk_size is the maximum length of each chunk.
+
+Example:
+chunk_size = 1000
+
+Meaning:
+Each chunk will have about 1000 characters.
+
+If a document has 5000 characters, it may become:
+
+5 chunks
+
+============================================================
+8) WHAT IS chunk_overlap?
+
+chunk_overlap means repeating some characters between chunks.
+
+Example:
+chunk_size = 1000
+chunk_overlap = 200
+
+Chunk 1:
+characters 0 to 1000
+
+Chunk 2:
+characters 800 to 1800
+
+So chunk 2 repeats last 200 characters from chunk 1.
+
+============================================================
+9) WHY chunk_overlap IS IMPORTANT?
+
+Because sometimes important sentences get split.
+
+Example sentence:
+"The capital of Bangladesh is Dhaka."
+
+If chunking breaks it like:
+
+Chunk 1 ends:
+"The capital of Bangladesh is"
+
+Chunk 2 starts:
+"Dhaka."
+
+Then chunk 1 has incomplete meaning.
+
+Overlap solves this problem by repeating text.
+
+============================================================
+10) WHAT IS SentenceTransformer?
+
+SentenceTransformer is a library used to generate embeddings.
+
+Example:
+
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+embedding = model.encode("Hello world")
+
+So it converts text into vector.
+
+============================================================
+11) WHAT IS MODEL all-MiniLM-L6-v2?
+
+"all-MiniLM-L6-v2" is a popular embedding model.
+
+It creates embeddings with dimension:
+
+384
+
+That means every chunk becomes 384 numbers.
+
+Example:
+One chunk embedding length = 384
+
+============================================================
+12) EXPLAINING IMPORTS
+
+from typing import List
+Used for type hinting.
+
+Example:
+documents: List[Document]
+Means: documents is a list of Document objects.
+
+import numpy as np
+Used because embeddings are stored as numpy arrays (matrix).
+
+from sentence_transformers import SentenceTransformer
+Loads embedding model.
+
+from langchain_core.documents import Document
+LangChain Document object (text + metadata).
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+Used for splitting text into chunks.
+
+============================================================
+13) WHAT DOES THIS LINE MEAN?
+
+from future import annotations
+
+This is a Python feature.
+It helps Python handle type hints properly.
+Not important for beginner understanding.
+You can ignore it safely.
+
+============================================================
+14) WHAT IS A CLASS IN PYTHON?
+
+A class is like a reusable machine.
+
+You create it once:
+
+emb_pipe = EmbeddingPipeline()
+
+Then you can reuse its functions:
+
+chunks = emb_pipe.chunk_documents(docs)
+embeddings = emb_pipe.embed_chunks(chunks)
+
+============================================================
+15) WHAT IS init() CONSTRUCTOR?
+
+init() runs automatically when object is created.
+
+Example:
+emb_pipe = EmbeddingPipeline()
+
+Then init() runs.
+
+It sets values like:
+
+chunk_size
+
+chunk_overlap
+
+model_name
+
+It loads embedding model.
+It creates text splitter.
+
+============================================================
+16) LOADING EMBEDDING MODEL
+
+self.model = SentenceTransformer(model_name)
+
+This loads the embedding model into memory.
+
+Then it prints:
+
+[INFO] Loaded embedding model: all-MiniLM-L6-v2
+
+============================================================
+17) CREATING TEXT SPLITTER
+
+self.splitter = RecursiveCharacterTextSplitter(
+chunk_size=self.chunk_size,
+chunk_overlap=self.chunk_overlap,
+length_function=len,
+separators=["\n\n", "\n", " ", ""],
+)
+
+This creates a smart splitter.
+
+It tries to split text using separators in this order:
+
+"\n\n" -> paragraph splitting
+
+"\n" -> line splitting
+
+" " -> word splitting
+
+"" -> character splitting (last option)
+
+This makes chunking safer and cleaner.
+
+============================================================
+18) METHOD: chunk_documents()
+
+def chunk_documents(self, documents: List[Document]) -> List[Document]:
+
+This means:
+Input = List of Document objects
+Output = List of chunked Document objects
+
+Step 1: Split documents
+
+chunks = self.splitter.split_documents(documents)
+
+This takes large documents and splits them into many smaller Document chunks.
+
+============================================================
+19) ADDING METADATA TO EACH CHUNK
+
+for i, c in enumerate(chunks):
+
+enumerate gives:
+
+i = index (0,1,2,3,...)
+
+c = chunk Document object
+
+c.metadata = c.metadata or {}
+If metadata is None, make it an empty dictionary.
+
+c.metadata["chunk_id"] = i
+Adds chunk id number.
+
+Example:
+chunk_id = 0
+chunk_id = 1
+chunk_id = 2
+
+c.metadata["chunk_size"] = len(c.page_content)
+Stores how many characters are inside this chunk.
+
+c.metadata.setdefault("source_file", c.metadata.get("source_file") or c.metadata.get("source"))
+
+Meaning:
+If source_file does not exist, try to fill it using "source".
+
+Example:
+If metadata contains:
+{"source": "book.pdf"}
+
+Then it becomes:
+{"source": "book.pdf", "source_file": "book.pdf"}
+
+c.metadata.setdefault("page", c.metadata.get("page", None))
+
+Meaning:
+If page does not exist, set page = None.
+
+============================================================
+20) FINAL PRINT IN chunk_documents()
+
+print(f"[INFO] Split {len(documents)} documents into {len(chunks)} chunks.")
+
+Example output:
+[INFO] Split 120 documents into 560 chunks.
+
+============================================================
+21) METHOD: embed_chunks()
+
+def embed_chunks(self, chunks: List[Document], normalize: bool = True) -> np.ndarray:
+
+Input = list of chunk Documents
+Output = numpy array of embeddings
+
+Step 1: Extract text only
+
+texts = [c.page_content for c in chunks]
+
+This makes a list of strings like:
+[
+"chunk 1 text...",
+"chunk 2 text...",
+"chunk 3 text..."
+]
+
+Embedding model needs plain text, not Document object.
+
+Step 2: Generate embeddings
+
+embeddings = self.model.encode(
+texts,
+show_progress_bar=True,
+convert_to_numpy=True,
+normalize_embeddings=normalize,
+).astype("float32")
+
+============================================================
+22) IMPORTANT PARAMETERS IN encode()
+
+show_progress_bar=True
+Shows progress bar while generating embeddings.
+
+convert_to_numpy=True
+Output becomes numpy array.
+
+normalize_embeddings=True
+This is important for cosine similarity search.
+It makes vectors normalized (length becomes 1).
+
+.astype("float32")
+FAISS works best with float32.
+So embeddings are converted to float32.
+
+============================================================
+23) WHAT IS NORMALIZATION?
+
+Normalization means embedding vector length becomes 1.
+
+This helps similarity searching.
+
+If you use cosine similarity search in FAISS, normalization is recommended.
+
+============================================================
+24) EMBEDDINGS SHAPE EXPLANATION
+
+print(f"[INFO] Embeddings shape: {embeddings.shape}")
+
+Example:
+(560, 384)
+
+Meaning:
+560 = number of chunks
+384 = embedding vector length per chunk
+
+============================================================
+25) MAIN EXECUTION BLOCK
+
+if name == "main":
+
+This means:
+This code runs only if you run the file directly.
+
+Example:
+python embedding_pipeline.py
+
+If you import this file in another Python file,
+then this block does not run.
+
+============================================================
+26) LOADING DOCUMENTS
+
+docs = load_all_documents("data")
+
+This loads all files from "data" folder and returns List[Document].
+
+Example:
+[
+Document(page_content="Page 1 text...", metadata={"source_file":"a.pdf", "page":1}),
+Document(page_content="Page 2 text...", metadata={"source_file":"a.pdf", "page":2})
+]
+
+============================================================
+27) CREATING PIPELINE OBJECT
+
+emb_pipe = EmbeddingPipeline()
+
+This loads model and creates splitter.
+
+============================================================
+28) CHUNKING DOCUMENTS
+
+chunks = emb_pipe.chunk_documents(docs)
+
+This returns chunked Document list.
+
+============================================================
+29) EMBEDDING CHUNKS
+
+embeddings = emb_pipe.embed_chunks(chunks)
+
+This returns numpy matrix of embeddings.
+
+============================================================
+30) PRINTING FIRST CHUNK METADATA
+
+print("\n[INFO] First chunk metadata:", chunks[0].metadata)
+
+Example output:
+{
+"source_file": "book.pdf",
+"page": 1,
+"chunk_id": 0,
+"chunk_size": 1000
+}
+
+============================================================
+31) PRINTING EMBEDDING VECTOR LENGTH
+
+print("[INFO] Example embedding vector length:", len(embeddings[0]))
+
+Example output:
+[INFO] Example embedding vector length: 384
+
+============================================================
+32) FULL EXPECTED OUTPUT WHEN RUNNING
+
+Example output:
+
+[INFO] Loaded embedding model: all-MiniLM-L6-v2
+[INFO] Split 120 documents into 560 chunks.
+[INFO] Generating embeddings for 560 chunks...
+100%|██████████████████████████| 560/560 [00:06<00:00, 92.20it/s]
+[INFO] Embeddings shape: (560, 384)
+
+[INFO] First chunk metadata: {'source_file': 'book.pdf', 'page': 1, 'chunk_id': 0, 'chunk_size': 1000}
+[INFO] Example embedding vector length: 384
+
+============================================================
+33) FINAL SUMMARY (MOST IMPORTANT POINTS)
+
+Document = page_content + metadata
+
+Chunking splits big documents into small documents
+
+Chunks are still Document objects, so metadata stays
+
+Embedding converts chunk text into vectors (numbers)
+
+Output embeddings is numpy matrix like:
+(number_of_chunks, vector_dimension)
+
+all-MiniLM-L6-v2 model produces 384 dimension embeddings
+
+normalize_embeddings=True improves cosine similarity search
+
+chunk metadata is added:
+
+chunk_id
+
+chunk_size
+
+source_file
+
+page
+
+Next step after embeddings:
+Store embeddings in FAISS or ChromaDB

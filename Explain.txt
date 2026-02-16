@@ -1,0 +1,354 @@
+from __future__ import annotations
+
+from typing import List
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+class EmbeddingPipeline:
+    """
+    Beginner-friendly pipeline:
+      1) chunk_documents(docs) -> List[Document] chunks
+      2) embed_chunks(chunks)  -> np.ndarray embeddings
+
+    Important: chunks remain Documents, so metadata is preserved for citations.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        chunk_size: int = 1000,
+        chunk_overlap: int = 200,
+    ):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.model_name = model_name
+
+        self.model = SentenceTransformer(model_name)
+        print(f"[INFO] Loaded embedding model: {model_name}")
+
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+    def chunk_documents(self, documents: List[Document]) -> List[Document]:
+        """
+        Split input Documents into smaller Documents (chunks).
+        Metadata is preserved automatically, then we add chunk metadata too.
+        """
+        chunks: List[Document] = self.splitter.split_documents(documents)
+
+        # Add helpful metadata for every chunk
+        for i, c in enumerate(chunks):
+            c.metadata = c.metadata or {}
+            c.metadata["chunk_id"] = i
+            c.metadata["chunk_size"] = len(c.page_content)
+
+            # Ensure these keys always exist (for citations)
+            c.metadata.setdefault("source_file", c.metadata.get("source_file") or c.metadata.get("source"))
+            c.metadata.setdefault("page", c.metadata.get("page", None))
+
+        print(f"[INFO] Split {len(documents)} documents into {len(chunks)} chunks.")
+        return chunks
+
+    def embed_chunks(self, chunks: List[Document], normalize: bool = True) -> np.ndarray:
+        """
+        Convert chunks to embeddings.
+        normalize=True makes cosine search (FAISS IP) work better.
+        """
+        texts = [c.page_content for c in chunks]
+        print(f"[INFO] Generating embeddings for {len(texts)} chunks...")
+
+        embeddings = self.model.encode(
+            texts,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            normalize_embeddings=normalize,  # IMPORTANT for cosine similarity
+        ).astype("float32")
+
+        print(f"[INFO] Embeddings shape: {embeddings.shape}")
+        return embeddings
+
+
+if __name__ == "__main__":
+    from src.data_loader import load_all_documents
+
+    docs = load_all_documents("data")
+    emb_pipe = EmbeddingPipeline()
+    chunks = emb_pipe.chunk_documents(docs)
+    embeddings = emb_pipe.embed_chunks(chunks)
+
+    print("\n[INFO] First chunk metadata:", chunks[0].metadata)
+    print("[INFO] Example embedding vector length:", len(embeddings[0]))
+-----------------------------------------------------
+What your code is doing (beginner explanation)
+1) load_all_documents("data")
+
+This returns a list of LangChain Document objects.
+
+Each Document has:
+
+page_content = text
+
+metadata = where it came from (file name, page number, etc.)
+
+2) Chunking (splitting)
+
+You cannot embed a whole PDF book at once. Too big.
+
+So we split into small pieces called chunks.
+
+Example:
+
+A PDF page has 2,000 characters
+
+You choose chunk_size=1000
+
+That page becomes 2 chunks (with some overlap)
+
+✅ Why overlap?
+If you split exactly at 1000, sometimes a sentence breaks.
+Overlap keeps some text repeated so meaning doesn’t get lost.
+
+3) Embedding
+
+Embedding converts text → numbers (vector)
+
+So each chunk becomes something like:
+[0.012, -0.04, 0.33, ...] (384 numbers for MiniLM)
+
+Then FAISS/Chroma can find similar chunks.
+
+----------------------------------
+3) Chunking (Splitting)
+
+We split documents into smaller pieces called chunks.
+
+Example:
+
+chunk_size = 1000
+
+chunk_overlap = 200
+
+Why overlap?
+Because it prevents losing meaning between chunk boundaries.
+
+4) Embeddings
+
+Embeddings convert text into vectors (numbers).
+
+Example:
+
+input text: "What is attention mechanism?"
+
+output: [0.12, -0.33, 0.98, ...]
+
+These vectors are stored in FAISS/Chroma.
+
+5) Vector Store (FAISS / Chroma)
+
+A vector store allows fast similarity search:
+
+Query text → embedding
+
+Compare with stored embeddings
+
+Return Top-K similar chunks
+
+📂 Folder Structure
+RAG_ONE/
+│── data/
+│── notebooks/
+│── src/
+│   ├── data_loader.py
+│   ├── embedding.py
+│   ├── faiss_store.py
+│── main.py
+│── README.md
+│── pyproject.toml
+
+🚀 How to Run
+1) Load documents
+from src.data_loader import load_all_documents
+docs = load_all_documents("data")
+
+2) Chunk + embed
+from src.embedding import EmbeddingPipeline
+
+pipe = EmbeddingPipeline()
+chunks = pipe.chunk_documents(docs)
+embeddings = pipe.embed_chunks(chunks)
+
+3) Store in FAISS
+from src.faiss_store import FaissVectorStore
+
+store = FaissVectorStore("faiss_store")
+store.build_from_documents(docs)
+
+4) Query
+store.load()
+results = store.query("Who is Sheikh Mujibur Rahman?", top_k=3)
+print(results)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==============================================================
+
+1) What does load_all_documents("data") do?
+
+load_all_documents("data") returns a list of LangChain Document objects.
+
+Each LangChain Document contains:
+
+page_content → the actual text
+
+metadata → extra information (file name, page number, etc.)
+
+Example (conceptually):
+
+Document(
+page_content="Sheikh Mujibur Rahman was ...",
+metadata={"source_file": "Sheikh_Mujibur_Rahman.pdf", "page": 3}
+)
+
+2) Why do we need Chunking (Splitting)?
+
+You cannot embed a full PDF book at once because it is too large.
+
+So we split text into smaller pieces called chunks.
+
+Example:
+
+A PDF page has 2000 characters
+
+We choose chunk_size = 1000
+
+That page becomes 2 chunks
+
+Why do we use overlap?
+
+Example:
+
+chunk_size = 1000
+
+chunk_overlap = 200
+
+If we split exactly at 1000 characters, a sentence might break.
+
+So overlap repeats the last 200 characters in the next chunk.
+This helps keep meaning and context.
+
+3) What is Embedding?
+
+Embedding converts text into numbers (vectors).
+
+Example:
+
+Input text:
+
+What is attention mechanism?
+
+Output embedding:
+
+[0.012, -0.04, 0.33, ...]
+
+For the model all-MiniLM-L6-v2, the vector length is usually 384 numbers.
+
+Embeddings allow semantic search (meaning-based search).
+
+4) What is a Vector Store (FAISS / Chroma)?
+
+A vector store is a database optimized for similarity search.
+
+It stores embeddings and allows fast retrieval.
+
+The process is:
+
+User query text → converted into embedding
+
+Compare query embedding with stored embeddings
+
+Return the Top-K most similar chunks
+
+FAISS and Chroma are both vector stores.
+
+5) Pipeline Summary (Full Flow)
+
+This is the complete RAG ingestion pipeline:
+
+Load documents from data/
+
+Convert files into LangChain Documents
+
+Split documents into chunks
+
+Create embeddings for each chunk
+
+Store embeddings in FAISS or Chroma
+
+Query FAISS/Chroma to retrieve relevant chunks
+
+6) Folder Structure
+
+RAG_ONE/
+│── data/
+│── notebooks/
+│── src/
+│ ├── data_loader.py
+│ ├── embedding.py
+│ ├── faiss_store.py
+│── main.py
+│── README.md
+│── pyproject.toml
+
+7) How to Run (Example)
+
+Step 1: Load documents
+
+from src.data_loader import load_all_documents
+
+docs = load_all_documents("data")
+print("Total loaded documents:", len(docs))
+
+Step 2: Chunk + Embed
+
+from src.embedding import EmbeddingPipeline
+
+pipe = EmbeddingPipeline()
+chunks = pipe.chunk_documents(docs)
+embeddings = pipe.embed_chunks(chunks)
+
+print("Total chunks:", len(chunks))
+print("Embeddings shape:", embeddings.shape)
+
+Step 3: Store embeddings in FAISS
+
+from src.faiss_store import FaissVectorStore
+
+store = FaissVectorStore("faiss_store")
+store.build_from_documents(docs)
+
+Step 4: Query FAISS
+
+store.load()
+results = store.query("Who is Sheikh Mujibur Rahman?", top_k=3)
+
+for r in results:
+print(r)
